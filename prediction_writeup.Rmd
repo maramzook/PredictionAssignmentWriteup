@@ -1,0 +1,124 @@
+---
+title: "Prediction Writeup"
+author: "JBB"
+date: "4/16/2017"
+output: html_document
+---
+
+### Summary
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+### Question
+The goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different classes.
+
+1. training data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+2. test data: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+### Load and Clean the Data
+```{r results='hide', message=FALSE}
+library(ggplot2);
+library(rattle); 
+library(RColorBrewer); 
+library(rpart.plot); 
+library(e1071)
+library(caret); 
+library(rpart);
+library(randomForest)
+```
+
+
+Read the data from the provided urls and exclude invalid data as well:
+```{r readData}
+url.train <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+url.test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training <- read.csv(url(url.train), na.strings = c("NA", "", "#DIV0!"))
+testing <- read.csv(url(url.test), na.strings = c("NA", "", "#DIV0!"))
+```
+
+
+Take a look at the size and dimention of the data:
+```{r}
+dim (training)
+dim (testing)
+```
+The data contains 19622 observations of 160 variables for training and 20 observations of the same variables for testing.
+Some columns in the training and testing datasets are filled with missing values hence removed from dataset. 
+```{r}
+training <-training[,colSums(is.na(training)) == 0]
+testing <-testing[,colSums(is.na(testing)) == 0]
+head(colnames(training))
+```
+
+
+The first seven variables of the training data were deleted as well, since they are irrelevant and connot contribute to the prediction.
+```{r}
+training <- training[,8:dim(training)[2]]
+testing <- testing[,8:dim(testing)[2]]
+dim (training) 
+dim (testing)
+```
+
+
+We used tranining part (60%), testing part (20%), and validation part (20%) to partition the data.
+```{r}
+set.seed(4976)
+dataSet1 <- createDataPartition(y = training$classe, p = 0.8, list = F)
+dataSet2 <- training[dataSet1,]
+validation <- training[-dataSet1,]
+training_1 <- createDataPartition(y = dataSet2$classe, p = 0.75, list = F)
+training_2 <- dataSet2[training_1,]
+testing_data <- dataSet2[-training_1,]
+
+```
+
+
+## Predictors
+Let's look at the distribution of the classes-data:
+```{r}
+qplot(classe, data=training_2, main="Class Distribution", fill=I("green"), col=I("black"))
+```
+
+and the predictors are among:
+```{r}
+names(training_2[,-53])
+```
+
+We can see predictors that have one unique value or predictors that are have both of the following characteristics. Following is the cross validation when developing our model.
+```{r}
+tree <- rpart(classe ~ ., data=training_2, method="class")
+prediction_tree <- predict(tree, testing_data, type="class")
+class_tree <- confusionMatrix(prediction_tree, testing_data$classe)
+class_tree
+```
+
+We can see that the Accuracy : 0.7673 with 95% CI : (0.7537, 0.7804).
+The the Decision Tree looks like:
+```{r}
+rpart.plot(tree, main="Decision Tree ", under=TRUE, faclen=0)
+```
+
+We can see the classification of the data. 
+Let's applying the model to the Random forest data
+```{r}
+forest_model <- randomForest(classe ~ ., data=training_2, method="class")
+prediction_forest <- predict(forest_model, testing_data, type="class")
+random_forest <- confusionMatrix(prediction_forest, testing_data$classe)
+random_forest
+```
+
+The abow result shows a significat accuracy as Accuracy : 0.9931 with 95% CI : (0.99, 0.9955). The Confusion Matrix only had  0.7394 % accuracy. Hence this model will be used for the final calculations.
+
+### Prediction
+From the previous result, the final prediction can be achieved using:
+```{r}
+prediction1 <- predict(forest_model, newdata=testing_data)
+confusionMatrix(prediction1, testing_data$classe)
+```
+
+
+From the results we can see that The Random Forest is a better predictive model than the Decision Tree. The accuracy rate is significantly larger. So that, there is no need for more important predictors for the Random Forest model.
+
+
+### Conclusions
+In this study, splitting data in partitions and applying two diff analysis, we concluded that the Random Forest is a much better predictive model than the Decision Tree. It has a larger accuracy (99.91%) compare to (77%).  With this accuracy we can verify that very few of the test samples will be missclassified.
+
